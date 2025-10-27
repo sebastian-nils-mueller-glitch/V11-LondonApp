@@ -1,39 +1,12 @@
 /* =========================================================
-   London 2025 – script.js (Daten + UI)
-   Erwartetes JSON (london2025_data.json):
-   {
-     "days": [
-       {
-         "title": "Anreise / Shoreditch",
-         "items": [
-           { "time": "09:00", "title": "Frühstück", "note": "Brick Lane Beigel", "lat": 51.521, "lng": -0.071 },
-           { "time": "11:00", "title": "Themse-Spaziergang" }
-         ]
-       },
-       ...
-     ],
-     "ideas": [
-       {
-         "group": "Museen",
-         "hint": "Viele kostenlos – Karte hilft bei der Route.",
-         "options": [
-           { "name": "Tate Modern", "note": "Panorama", "lat": 51.5076, "lng": -0.0994 },
-           { "name": "British Museum" }
-         ]
-       }
-     ]
-   }
+   London 2025 – script.js (Banner + Daten + UI)
    ========================================================= */
 
-/* ---------------------------------
-   Hilfen
-   --------------------------------- */
+/* Utils */
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-/* ---------------------------------
-   1) Tagesabhängiger Banner (EU/Berlin)
-   --------------------------------- */
+/* 1) Tagesabhängiger Banner */
 (function bannerByTime(){
   const TZ = 'Europe/Berlin';
   const HERO = $('#trip-info');
@@ -75,37 +48,39 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
   setInterval(applyHero, 60 * 60 * 1000);
 })();
 
-/* ---------------------------------
-   2) Daten laden & rendern
-   --------------------------------- */
-const AppState = {
-  data: { days: [], ideas: [] },
-  activeDayIndex: 0,
-  map: null,
-  mapLayer: null
-};
+/* 2) Daten laden */
+const AppState = { data: { days: [], ideas: [] }, activeDayIndex: 0, map: null, mapLayer: null };
 
 async function loadData() {
+  // robust relativ zum Dokument (funktioniert im GitHub Pages Unterordner)
+  const url = new URL('london2025_data.json', document.baseURI);
+  url.searchParams.set('v', '2'); // Cachebust
+
   try {
-    const res = await fetch('london2025_data.json', { cache: 'no-store' });
-    if (!res.ok) throw new Error('JSON nicht gefunden');
+    const res = await fetch(url.toString(), { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status} für ${url.pathname}`);
     const json = await res.json();
-    // Normalisieren
-    AppState.data.days = Array.isArray(json.days) ? json.days : [];
-    AppState.data.ideas = Array.isArray(json.ideas) ? json.ideas : [];
+
+    // Akzeptiere "days/ideas" oder "tage/ideen"
+    const days  = Array.isArray(json.days)  ? json.days  : (Array.isArray(json.tage)  ? json.tage  : []);
+    const ideas = Array.isArray(json.ideas) ? json.ideas : (Array.isArray(json.ideen) ? json.ideen : []);
+
+    AppState.data.days  = days;
+    AppState.data.ideas = ideas;
+
+    console.log('JSON geladen:', url.pathname, { days: days.length, ideas: ideas.length });
   } catch (e) {
-    console.warn('Daten konnten nicht geladen werden:', e.message);
-    AppState.data = { days: [], ideas: [] }; // leer lassen statt Dummy
+    console.error('Daten-Fehler:', e);
+    AppState.data = { days: [], ideas: [] };
   }
 }
 
+/* 3) Render: Days & Ideas */
 function renderDays() {
-  const grid = $('#day-grid');
-  if (!grid) return;
+  const grid = $('#day-grid'); if (!grid) return;
   grid.innerHTML = '';
 
   if (!AppState.data.days.length) {
-    // Leerer Zustand
     const empty = document.createElement('div');
     empty.className = 'card';
     empty.textContent = 'Keine Tage geladen. Prüfe london2025_data.json';
@@ -115,21 +90,15 @@ function renderDays() {
 
   AppState.data.days.forEach((day, idx) => {
     const card = document.createElement('button');
-    card.className = 'card';
-    card.setAttribute('role','listitem');
-    card.style.textAlign = 'left';
-    card.innerHTML = `
-      <strong>Tag ${idx + 1}</strong><br/>
-      <span style="opacity:.8">${day.title || '—'}</span>
-    `;
+    card.className = 'card'; card.setAttribute('role','listitem'); card.style.textAlign = 'left';
+    card.innerHTML = `<strong>Tag ${idx + 1}</strong><br/><span style="opacity:.8">${day.title || '—'}</span>`;
     card.addEventListener('click', () => window.showDay(idx));
     grid.appendChild(card);
   });
 }
 
 function renderIdeas() {
-  const wrap = $('#ideas');
-  if (!wrap) return;
+  const wrap = $('#ideas'); if (!wrap) return;
   wrap.innerHTML = '';
 
   if (!AppState.data.ideas.length) {
@@ -157,34 +126,20 @@ function renderIdeas() {
   });
 }
 
-/* ---------------------------------
-   3) Bottom Sheet (Tagesansicht)
-   --------------------------------- */
+/* 4) Bottom Sheet */
 (function sheetControls(){
-  const sheet = $('#sheet');
-  if (!sheet) return;
+  const sheet = $('#sheet'); if (!sheet) return;
+  const closeBtn = $('#closeSheet'), prevBtn  = $('#prevDayTop'), nextBtn  = $('#nextDayTop');
+  const titleEl  = $('#sheetTitle'), timeline = $('#timeline');
 
-  const closeBtn = $('#closeSheet');
-  const prevBtn  = $('#prevDayTop');
-  const nextBtn  = $('#nextDayTop');
-  const titleEl  = $('#sheetTitle');
-  const timeline = $('#timeline');
-
-  function openSheet(){
-    sheet.classList.remove('hidden');
-    sheet.setAttribute('aria-hidden', 'false');
-  }
-  function closeSheet(){
-    sheet.classList.add('hidden');
-    sheet.setAttribute('aria-hidden', 'true');
-  }
+  function openSheet(){ sheet.classList.remove('hidden'); sheet.setAttribute('aria-hidden', 'false'); }
+  function closeSheet(){ sheet.classList.add('hidden'); sheet.setAttribute('aria-hidden', 'true'); }
 
   window.showDay = function showDay(idx = 0){
     AppState.activeDayIndex = Math.max(0, Math.min(idx, AppState.data.days.length - 1));
     const day = AppState.data.days[AppState.activeDayIndex] || {};
     titleEl && (titleEl.textContent = `Tag ${AppState.activeDayIndex + 1}${day.title ? ' – ' + day.title : ''}`);
 
-    // Timeline befüllen
     if (timeline){
       timeline.innerHTML = '';
       (day.items || []).forEach(it => {
@@ -198,9 +153,7 @@ function renderIdeas() {
       });
     }
 
-    // Map Marker vorbereiten (falls Modal gleich geöffnet wird)
     prepareMapMarkersFromDay(day);
-
     openSheet();
   };
 
@@ -209,17 +162,11 @@ function renderIdeas() {
   nextBtn  && nextBtn.addEventListener('click', () => window.showDay(AppState.activeDayIndex + 1));
 })();
 
-/* ---------------------------------
-   4) Karten-Modal (Leaflet) + Globaler Button
-   --------------------------------- */
+/* 5) Karte (Leaflet) + Globaler Button */
 (function mapModal(){
-  const modal   = $('#mapModal');
-  const mapDiv  = $('#map');
-  const openBtn = $('#openMap');
-  const closeBtn= $('#closeMap');
-  const dblHint = $('#mapHint');
+  const modal = $('#mapModal'), mapDiv = $('#map');
+  const openBtn = $('#openMap'), closeBtn= $('#closeMap'), dblHint = $('#mapHint');
   const openGlobal = $('#openMapGlobal');
-
   if (!modal || !mapDiv) return;
 
   function ensureMap(){
@@ -231,15 +178,10 @@ function renderIdeas() {
   }
 
   function openModal(){
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden','false');
-    ensureMap();
-    setTimeout(() => { AppState.map && AppState.map.invalidateSize(); }, 0);
+    modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false');
+    ensureMap(); setTimeout(() => { AppState.map && AppState.map.invalidateSize(); }, 0);
   }
-  function closeModal(){
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden','true');
-  }
+  function closeModal(){ modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
 
   openBtn   && openBtn.addEventListener('click', openModal);
   closeBtn  && closeBtn.addEventListener('click', closeModal);
@@ -251,44 +193,29 @@ function renderIdeas() {
   });
 })();
 
-/* Marker aus dem aktiven Tag vorbereiten */
+/* Marker aus aktivem Tag */
 function prepareMapMarkersFromDay(day){
   if (!day || !Array.isArray(day.items) || !window.L || !AppState.map) return;
   if (AppState.mapLayer){ AppState.mapLayer.clearLayers(); }
   const pts = day.items.filter(i => typeof i.lat === 'number' && typeof i.lng === 'number');
-  pts.forEach(p => {
-    L.marker([p.lat, p.lng]).addTo(AppState.mapLayer).bindPopup(p.title || 'Ort');
-  });
-  if (pts.length){
-    const bounds = L.latLngBounds(pts.map(p => [p.lat, p.lng]));
-    AppState.map.fitBounds(bounds.pad(0.25));
-  }
+  pts.forEach(p => { L.marker([p.lat, p.lng]).addTo(AppState.mapLayer).bindPopup(p.title || 'Ort'); });
+  if (pts.length){ const bounds = L.latLngBounds(pts.map(p => [p.lat, p.lng])); AppState.map.fitBounds(bounds.pad(0.25)); }
 }
 
-/* ---------------------------------
-   5) Standort-Freigabe (optional)
-   --------------------------------- */
+/* 6) Standort (optional) */
 (function geolocation(){
   const btn = $('#enableLocation');
   if (!btn || !('geolocation' in navigator)) return;
   btn.addEventListener('click', ()=>{
     navigator.geolocation.getCurrentPosition(
-      pos => {
-        console.info('Standort:', pos.coords);
-        // Optional: Karte öffnen und zentrieren
-      },
-      err => {
-        console.warn('Standort abgelehnt/Fehler:', err && err.message);
-        alert('Standort konnte nicht ermittelt werden.');
-      },
+      pos => { console.info('Standort:', pos.coords); },
+      err => { console.warn('Standort abgelehnt/Fehler:', err && err.message); alert('Standort konnte nicht ermittelt werden.'); },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     );
   });
 })();
 
-/* ---------------------------------
-   6) Boot
-   --------------------------------- */
+/* 7) Boot */
 document.addEventListener('DOMContentLoaded', async () => {
   await loadData();
   renderDays();
