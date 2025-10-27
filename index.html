@@ -11,18 +11,18 @@
   <link rel="icon" href="icons/icon-192.png" sizes="192x192" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
 
-  <!-- Preload für Banner-Bilder (liegen im Ordner img/) -->
+  <!-- Preload für Banner-Bilder -->
   <link rel="preload" as="image" href="img/london-morning.jpg">
   <link rel="preload" as="image" href="img/london-day.jpg">
   <link rel="preload" as="image" href="img/london-evening.jpg">
   <link rel="preload" as="image" href="img/london-night.jpg">
 
   <!-- Styles -->
-  <link rel="stylesheet" href="style.css?v=1" />
+  <link rel="stylesheet" href="style.css?v=2" />
 
-  <!-- Leaflet (optional: nur falls Karte genutzt wird) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="" crossorigin="">
-  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="" crossorigin=""></script>
+  <!-- Leaflet (Karte) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 </head>
 
 <body>
@@ -36,7 +36,7 @@
     </nav>
   </header>
 
-  <!-- HERO: Tagesabhängiger Banner (JS setzt --hero-image) -->
+  <!-- HERO: Tagesabhängiger Banner -->
   <section id="trip-info" class="trip-banner" aria-label="Trip Info">
     <div class="trip-overlay">
       <div class="trip-content">
@@ -51,26 +51,23 @@
 
   <!-- MAIN -->
   <main id="app" class="app-main" role="main">
-    <!-- Hinweis für Kartenfunktionen -->
     <aside class="map-hint" role="note">
       <p>Standort nutzen für Zonen-Vorschläge und die schnellste Route auf der Karte.</p>
       <button id="enableLocation" class="linklike" aria-label="Standortfreigabe aktivieren">Standort freigeben</button>
     </aside>
 
-    <!-- Tageübersicht -->
     <section aria-labelledby="daysTitle">
       <h2 id="daysTitle" class="section-title">Tage (1–6)</h2>
       <div id="day-grid" class="grid" role="list"></div>
     </section>
 
-    <!-- Ideen & Alternativen -->
     <section aria-labelledby="ideasTitle">
       <h2 id="ideasTitle" class="section-title">Ideen & Alternativen</h2>
       <div id="ideas" class="ideas" role="region" aria-live="polite"></div>
     </section>
   </main>
 
-  <!-- BOTTOM SHEET: Tagesansicht -->
+  <!-- BOTTOM SHEET -->
   <div id="sheet" class="sheet hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
     <div class="sheet__header">
       <h3 id="sheetTitle">Tag</h3>
@@ -99,9 +96,8 @@
   <footer class="app-footer" role="contentinfo">© London 2025</footer>
 
   <!-- Scripts -->
-  <script src="script.js?v=1"></script>
+  <script src="script.js?v=3"></script>
   <script>
-    // Service Worker Registrierung (idempotent)
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').catch(() => {});
