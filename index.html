@@ -11,7 +11,7 @@
   <link rel="icon" href="icons/icon-192.png" sizes="192x192" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
 
-  <!-- Preload für Banner-Bilder -->
+  <!-- Preload Banner-Bilder -->
   <link rel="preload" as="image" href="img/london-morning.jpg">
   <link rel="preload" as="image" href="img/london-day.jpg">
   <link rel="preload" as="image" href="img/london-evening.jpg">
@@ -28,22 +28,18 @@
 <body>
   <!-- HEADER -->
   <header class="app-header" role="banner">
-    <div class="brand">
-      <h1 class="brand-title">London 2025</h1>
-    </div>
+    <div class="brand"><h1 class="brand-title">London 2025</h1></div>
     <nav class="top-actions" aria-label="Schnellzugriff">
       <button id="openMapGlobal" class="btn nav nav-map" title="Tageskarte" aria-label="Tageskarte">🗺️ Tageskarte</button>
     </nav>
   </header>
 
-  <!-- HERO: Tagesabhängiger Banner -->
+  <!-- HERO -->
   <section id="trip-info" class="trip-banner" aria-label="Trip Info">
     <div class="trip-overlay">
       <div class="trip-content">
         <h2 id="heroTitle" class="trip-title">🎆 London New Year’s Trip 2025/2026</h2>
-        <p class="trip-hotel">
-          🏨 <a href="https://all.accor.com/hotel/5011/index.de.shtml" target="_blank" rel="noopener">IBIS London City – Shoreditch</a>
-        </p>
+        <p class="trip-hotel">🏨 <a href="https://all.accor.com/hotel/5011/index.de.shtml" target="_blank" rel="noopener">IBIS London City – Shoreditch</a></p>
         <p class="trip-dates">📅 28. Dez 2025 – 02. Jan 2026</p>
       </div>
     </div>
@@ -96,7 +92,7 @@
   <footer class="app-footer" role="contentinfo">© London 2025</footer>
 
   <!-- Scripts -->
-  <script src="script.js?v=3"></script>
+  <script src="script.js?v=5"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
