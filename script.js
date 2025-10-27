@@ -1,16 +1,44 @@
 /* =========================================================
-   London 2025 – script.js
+   London 2025 – script.js (Daten + UI)
+   Erwartetes JSON (london2025_data.json):
+   {
+     "days": [
+       {
+         "title": "Anreise / Shoreditch",
+         "items": [
+           { "time": "09:00", "title": "Frühstück", "note": "Brick Lane Beigel", "lat": 51.521, "lng": -0.071 },
+           { "time": "11:00", "title": "Themse-Spaziergang" }
+         ]
+       },
+       ...
+     ],
+     "ideas": [
+       {
+         "group": "Museen",
+         "hint": "Viele kostenlos – Karte hilft bei der Route.",
+         "options": [
+           { "name": "Tate Modern", "note": "Panorama", "lat": 51.5076, "lng": -0.0994 },
+           { "name": "British Museum" }
+         ]
+       }
+     ]
+   }
    ========================================================= */
+
+/* ---------------------------------
+   Hilfen
+   --------------------------------- */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 /* ---------------------------------
    1) Tagesabhängiger Banner (EU/Berlin)
    --------------------------------- */
 (function bannerByTime(){
   const TZ = 'Europe/Berlin';
-  const HERO = document.getElementById('trip-info');
+  const HERO = $('#trip-info');
   if (!HERO) return;
 
-  // Pfade zu deinen vier Bildern (liegen unter /img/)
   const HERO_IMAGES = {
     morning: 'img/london-morning.jpg',  // 05–09:59
     day:     'img/london-day.jpg',      // 10–16:59
@@ -19,64 +47,128 @@
   };
 
   function getHourInTZ(timeZone){
-    const fmt = new Intl.DateTimeFormat('de-DE', {
-      timeZone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit'
-    });
+    const fmt = new Intl.DateTimeFormat('de-DE', { timeZone, hourCycle: 'h23', hour: '2-digit' });
     const parts = fmt.formatToParts(new Date());
     return parseInt(parts.find(p => p.type === 'hour').value, 10);
   }
-
-  function getDaypart(hour){
-    if (hour >= 5 && hour < 10) return 'morning';
-    if (hour >= 10 && hour < 17) return 'day';
-    if (hour >= 17 && hour < 21) return 'evening';
+  function getDaypart(h){
+    if (h >= 5 && h < 10) return 'morning';
+    if (h >= 10 && h < 17) return 'day';
+    if (h >= 17 && h < 21) return 'evening';
     return 'night';
   }
-
   function preload(src){
-    return new Promise((resolve)=>{ const img = new Image();
-      img.onload = ()=>resolve(src);
-      img.onerror = ()=>resolve(null);
-      img.src = src;
-    });
+    return new Promise(res => { const i = new Image(); i.onload = () => res(src); i.onerror = () => res(null); i.src = src; });
   }
 
   async function applyHero(){
-    // Zum Testen kannst du kurz eine Stunde erzwingen:
-    // window.__forceTestHour = 18; // danach wieder entfernen!
-    const hour = (typeof window.__forceTestHour === 'number')
-      ? window.__forceTestHour
-      : getHourInTZ(TZ);
-
+    const hour = (typeof window.__forceTestHour === 'number') ? window.__forceTestHour : getHourInTZ(TZ);
     const part = getDaypart(hour);
-    const src = HERO_IMAGES[part];
-
     HERO.setAttribute('data-daypart', part);
-
-    const loaded = await preload(src);
-    const finalSrc = loaded || HERO_IMAGES.day; // Fallback
+    const loaded = await preload(HERO_IMAGES[part]);
+    const finalSrc = loaded || HERO_IMAGES.day;
     HERO.style.setProperty('--hero-image', `url("${finalSrc}")`);
   }
 
   document.addEventListener('DOMContentLoaded', applyHero, { once: true });
-  document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) applyHero(); });
-  setInterval(applyHero, 60 * 60 * 1000); // stündlich aktualisieren
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) applyHero(); });
+  setInterval(applyHero, 60 * 60 * 1000);
 })();
 
 /* ---------------------------------
-   2) Bottom Sheet (Tagesansicht)
+   2) Daten laden & rendern
+   --------------------------------- */
+const AppState = {
+  data: { days: [], ideas: [] },
+  activeDayIndex: 0,
+  map: null,
+  mapLayer: null
+};
+
+async function loadData() {
+  try {
+    const res = await fetch('london2025_data.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('JSON nicht gefunden');
+    const json = await res.json();
+    // Normalisieren
+    AppState.data.days = Array.isArray(json.days) ? json.days : [];
+    AppState.data.ideas = Array.isArray(json.ideas) ? json.ideas : [];
+  } catch (e) {
+    console.warn('Daten konnten nicht geladen werden:', e.message);
+    AppState.data = { days: [], ideas: [] }; // leer lassen statt Dummy
+  }
+}
+
+function renderDays() {
+  const grid = $('#day-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  if (!AppState.data.days.length) {
+    // Leerer Zustand
+    const empty = document.createElement('div');
+    empty.className = 'card';
+    empty.textContent = 'Keine Tage geladen. Prüfe london2025_data.json';
+    grid.appendChild(empty);
+    return;
+  }
+
+  AppState.data.days.forEach((day, idx) => {
+    const card = document.createElement('button');
+    card.className = 'card';
+    card.setAttribute('role','listitem');
+    card.style.textAlign = 'left';
+    card.innerHTML = `
+      <strong>Tag ${idx + 1}</strong><br/>
+      <span style="opacity:.8">${day.title || '—'}</span>
+    `;
+    card.addEventListener('click', () => window.showDay(idx));
+    grid.appendChild(card);
+  });
+}
+
+function renderIdeas() {
+  const wrap = $('#ideas');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  if (!AppState.data.ideas.length) {
+    const empty = document.createElement('div');
+    empty.className = 'card';
+    empty.textContent = 'Keine Ideen geladen. Prüfe london2025_data.json';
+    wrap.appendChild(empty);
+    return;
+  }
+
+  AppState.data.ideas.forEach(group => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const options = (group.options || []).map(opt => {
+      const parts = [opt.name].filter(Boolean);
+      if (opt.note) parts.push(`<span style="opacity:.75">(${opt.note})</span>`);
+      return `<li>${parts.join(' ')}</li>`;
+    }).join('');
+    card.innerHTML = `
+      <h3 style="margin:0 0 6px">${group.group || 'Ideen'}</h3>
+      ${group.hint ? `<p style="margin:0 0 6px;opacity:.8">${group.hint}</p>` : ''}
+      <ul style="margin:0;padding-left:18px">${options}</ul>
+    `;
+    wrap.appendChild(card);
+  });
+}
+
+/* ---------------------------------
+   3) Bottom Sheet (Tagesansicht)
    --------------------------------- */
 (function sheetControls(){
-  const sheet = document.getElementById('sheet');
+  const sheet = $('#sheet');
   if (!sheet) return;
 
-  const closeBtn = document.getElementById('closeSheet');
-  const prevBtn  = document.getElementById('prevDayTop');
-  const nextBtn  = document.getElementById('nextDayTop');
-  const titleEl  = document.getElementById('sheetTitle');
-  const timeline = document.getElementById('timeline');
-
-  let activeDayIndex = 0;
+  const closeBtn = $('#closeSheet');
+  const prevBtn  = $('#prevDayTop');
+  const nextBtn  = $('#nextDayTop');
+  const titleEl  = $('#sheetTitle');
+  const timeline = $('#timeline');
 
   function openSheet(){
     sheet.classList.remove('hidden');
@@ -87,61 +179,62 @@
     sheet.setAttribute('aria-hidden', 'true');
   }
 
-  // Öffentliche API, falls du extern triggern willst:
   window.showDay = function showDay(idx = 0){
-    activeDayIndex = Math.max(0, idx|0);
-    titleEl && (titleEl.textContent = `Tag ${activeDayIndex + 1}`);
-    // Dummy-Inhalt (kannst du später mit echten Daten ersetzen)
+    AppState.activeDayIndex = Math.max(0, Math.min(idx, AppState.data.days.length - 1));
+    const day = AppState.data.days[AppState.activeDayIndex] || {};
+    titleEl && (titleEl.textContent = `Tag ${AppState.activeDayIndex + 1}${day.title ? ' – ' + day.title : ''}`);
+
+    // Timeline befüllen
     if (timeline){
       timeline.innerHTML = '';
-      const make = (t)=>{ const el = document.createElement('div'); el.className='item'; el.textContent=t; return el; };
-      timeline.append(
-        make('09:00 Frühstück in Shoreditch'),
-        make('11:00 Spaziergang an der Themse'),
-        make('14:00 Museum / Gallery'),
-        make('18:00 Dinner & Drinks')
-      );
+      (day.items || []).forEach(it => {
+        const el = document.createElement('div');
+        el.className = 'item';
+        const t = it.time ? `<strong>${it.time}</strong> · ` : '';
+        const name = it.title || '—';
+        const note = it.note ? ` <span style="opacity:.75">(${it.note})</span>` : '';
+        el.innerHTML = `${t}${name}${note}`;
+        timeline.appendChild(el);
+      });
     }
+
+    // Map Marker vorbereiten (falls Modal gleich geöffnet wird)
+    prepareMapMarkersFromDay(day);
+
     openSheet();
   };
 
   closeBtn && closeBtn.addEventListener('click', closeSheet);
-  prevBtn  && prevBtn.addEventListener('click', ()=> window.showDay(Math.max(0, activeDayIndex - 1)));
-  nextBtn  && nextBtn.addEventListener('click', ()=> window.showDay(activeDayIndex + 1));
+  prevBtn  && prevBtn.addEventListener('click', () => window.showDay(Math.max(0, AppState.activeDayIndex - 1)));
+  nextBtn  && nextBtn.addEventListener('click', () => window.showDay(AppState.activeDayIndex + 1));
 })();
 
 /* ---------------------------------
-   3) Karten-Modal (Leaflet) + Globaler Button
+   4) Karten-Modal (Leaflet) + Globaler Button
    --------------------------------- */
 (function mapModal(){
-  const modal   = document.getElementById('mapModal');
-  const mapDiv  = document.getElementById('map');
-  const openBtn = document.getElementById('openMap');
-  const closeBtn= document.getElementById('closeMap');
-  const dblHint = document.getElementById('mapHint');
-  const openGlobal = document.getElementById('openMapGlobal');
+  const modal   = $('#mapModal');
+  const mapDiv  = $('#map');
+  const openBtn = $('#openMap');
+  const closeBtn= $('#closeMap');
+  const dblHint = $('#mapHint');
+  const openGlobal = $('#openMapGlobal');
 
   if (!modal || !mapDiv) return;
 
-  let mapInstance = null;
-
-  function ensureLeafletMap(){
-    if (mapInstance) return mapInstance;
-    // Default: London Zentrum
-    mapInstance = L.map(mapDiv).setView([51.5074, -0.1278], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap'
-    }).addTo(mapInstance);
-    // Beispielmarker (kannst du ersetzen)
-    L.marker([51.505, -0.09]).addTo(mapInstance).bindPopup('Hallo London 👋');
-    return mapInstance;
+  function ensureMap(){
+    if (AppState.map) return AppState.map;
+    AppState.map = L.map(mapDiv).setView([51.5074, -0.1278], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(AppState.map);
+    AppState.mapLayer = L.layerGroup().addTo(AppState.map);
+    return AppState.map;
   }
 
   function openModal(){
     modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden','false');
-    ensureLeafletMap();
-    setTimeout(()=>{ mapInstance && mapInstance.invalidateSize(); }, 0);
+    ensureMap();
+    setTimeout(() => { AppState.map && AppState.map.invalidateSize(); }, 0);
   }
   function closeModal(){
     modal.classList.add('hidden');
@@ -152,33 +245,39 @@
   closeBtn  && closeBtn.addEventListener('click', closeModal);
   modal.addEventListener('dblclick', (e)=>{ if (e.target === modal || e.target === dblHint) closeModal(); });
 
-  // Globaler Button: öffnet zuerst die Tagesansicht, dann die Karte
   openGlobal && openGlobal.addEventListener('click', ()=>{
-    if (typeof window.showDay === 'function') window.showDay(0); // Tag 1 als Fallback
+    if (typeof window.showDay === 'function') window.showDay(0);
     openModal();
   });
 })();
 
+/* Marker aus dem aktiven Tag vorbereiten */
+function prepareMapMarkersFromDay(day){
+  if (!day || !Array.isArray(day.items) || !window.L || !AppState.map) return;
+  if (AppState.mapLayer){ AppState.mapLayer.clearLayers(); }
+  const pts = day.items.filter(i => typeof i.lat === 'number' && typeof i.lng === 'number');
+  pts.forEach(p => {
+    L.marker([p.lat, p.lng]).addTo(AppState.mapLayer).bindPopup(p.title || 'Ort');
+  });
+  if (pts.length){
+    const bounds = L.latLngBounds(pts.map(p => [p.lat, p.lng]));
+    AppState.map.fitBounds(bounds.pad(0.25));
+  }
+}
+
 /* ---------------------------------
-   4) Standort-Freigabe (für spätere Zonen-/Routing-Features)
+   5) Standort-Freigabe (optional)
    --------------------------------- */
 (function geolocation(){
-  const btn = document.getElementById('enableLocation');
+  const btn = $('#enableLocation');
   if (!btn || !('geolocation' in navigator)) return;
-
   btn.addEventListener('click', ()=>{
     navigator.geolocation.getCurrentPosition(
-      (pos)=>{
-        const { latitude, longitude } = pos.coords;
-        console.info('Standort:', latitude, longitude);
-        // Hier könntest du: Karte zentrieren, Tarif-Zonen vorschlagen, etc.
-        const mapEl = document.getElementById('map');
-        if (mapEl && window.L){ 
-          // Soft-Integr.: falls Karte offen ist → zentrieren
-          const _map = mapEl._leaflet_id ? window.L.map(mapEl, { attributionControl:false }) : null;
-        }
+      pos => {
+        console.info('Standort:', pos.coords);
+        // Optional: Karte öffnen und zentrieren
       },
-      (err)=>{
+      err => {
         console.warn('Standort abgelehnt/Fehler:', err && err.message);
         alert('Standort konnte nicht ermittelt werden.');
       },
@@ -186,3 +285,12 @@
     );
   });
 })();
+
+/* ---------------------------------
+   6) Boot
+   --------------------------------- */
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadData();
+  renderDays();
+  renderIdeas();
+});
